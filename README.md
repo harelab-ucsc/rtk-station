@@ -51,6 +51,20 @@ ssh rtk-bucket@<dhcp-assigned-ip>  # check your router or use arp-scan
 ```
 Username: `rtk-bucket`, password: `password`
 
+## NTRIP Connection
+
+Use these credentials on the rover (DJI controller, u-center, etc.):
+
+| Field | Value |
+|---|---|
+| Host | `172.31.106.2` (via hotspot) or DHCP IP (lab ethernet — check router) |
+| Port | `2101` |
+| Username | `myuser` |
+| Password | `mypassword` |
+| Mountpoint | `pygnssutils` |
+
+The NTRIP server only streams data once the ZED has completed survey-in (fix acquired, accuracy < 5m).
+
 ## Logs
 
 Each boot creates one directory containing a log file per service:
@@ -60,7 +74,7 @@ Each boot creates one directory containing a log file per service:
     boot-20250516_120000/
         gnss_server.log
         gnss_to_ntrip.log
-        gnss_to_rfd900.log
+        rtk-watchdog.log
     boot-20250516_131500/
         ...
 ```
