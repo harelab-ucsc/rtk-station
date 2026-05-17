@@ -26,11 +26,11 @@ fi
 sudo mkdir -p "$DEST_DIR"
 sudo cp "$SERVICE_DIR"/*.service "$DEST_DIR"/
 
-echo "Installing rtk-log-setup and rtk-log-run to /usr/local/bin/..."
-sudo cp "$SCRIPT_DIR/rtk-log-setup" /usr/local/bin/rtk-log-setup
-sudo chmod +x /usr/local/bin/rtk-log-setup
-sudo cp "$SCRIPT_DIR/rtk-log-run" /usr/local/bin/rtk-log-run
-sudo chmod +x /usr/local/bin/rtk-log-run
+echo "Installing helper scripts to /usr/local/bin/..."
+for script in rtk-log-setup rtk-log-run rtk-log-tail; do
+    sudo cp "$SCRIPT_DIR/$script" /usr/local/bin/$script
+    sudo chmod +x /usr/local/bin/$script
+done
 sudo mkdir -p /var/log/rtk-station
 
 if pidof systemd > /dev/null 2>&1; then

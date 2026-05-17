@@ -1,0 +1,11 @@
+#!/bin/bash
+# Wait for the latest boot log for a service then follow it.
+# Usage: rtk-log-tail <service_name>
+SERVICE="$1"
+LOG_BASE="/var/log/rtk-station"
+echo "Waiting for $SERVICE log..."
+while true; do
+    f=$(ls -1t "$LOG_BASE"/boot-*/"$SERVICE".log 2>/dev/null | head -1)
+    [ -n "$f" ] && exec tail -F "$f"
+    sleep 2
+done
