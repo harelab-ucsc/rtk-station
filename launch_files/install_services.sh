@@ -39,6 +39,13 @@ else
     echo "systemd not active — service files installed, skipping daemon-reload/enable"
 fi
 
+if pidof systemd > /dev/null 2>&1; then
+    echo "Enabling SSH..."
+    sudo systemctl enable ssh
+    sudo systemctl start ssh
+    echo "SSH enabled."
+fi
+
 echo "Done. You can now start services with: systemctl start <service-name>, or start_services.sh"
 
 echo ""
