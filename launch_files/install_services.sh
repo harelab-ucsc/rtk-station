@@ -61,3 +61,7 @@ echo "Done. You can now start services with: systemctl start <service-name>, or 
 echo ""
 echo "Installing netconfig..."
 bash "$SCRIPT_DIR/install_netconfig.sh"
+
+echo ""
+echo "Configuring ZED GNSS module..."
+bash "$SCRIPT_DIR/configure_zed.sh"

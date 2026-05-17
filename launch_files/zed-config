@@ -1,0 +1,62 @@
+#!/usr/bin/env python3
+"""Send UBX commands to configure ZED for RTK base station mode.
+Enables RTCM3 output on USB and sets TMODE3 to Survey-In, then saves to flash.
+"""
+import struct, sys, time, serial
+
+def ubx_checksum(data):
+    a = b = 0
+    for byte in data:
+        a = (a + byte) & 0xFF
+        b = (b + a) & 0xFF
+    return a, b
+
+def ubx_packet(cls, mid, payload=b''):
+    length = struct.pack('<H', len(payload))
+    inner = bytes([cls, mid]) + length + payload
+    ca, cb = ubx_checksum(inner)
+    return b'\xb5\x62' + inner + bytes([ca, cb])
+
+def send(ser, pkt, label=''):
+    ser.write(pkt)
+    ser.flush()
+    time.sleep(0.15)
+    if label:
+        print(f"  {label}")
+
+PORT, BAUD = '/dev/ttyACM0', 9600
+
+try:
+    ser = serial.Serial(PORT, BAUD, timeout=3)
+except serial.SerialException as e:
+    print(f"Cannot open {PORT}: {e}", file=sys.stderr)
+    sys.exit(1)
+
+print(f"Configuring ZED on {PORT}...")
+
+# Enable RTCM3 messages on USB — CFG-MSG (0x06/0x01)
+# payload: msgClass, msgID, rateDDC, rateUART1, rateUART2, rateUSB, rateSPI, reserved
+for cls, mid, name in [
+    (0xF5, 0x05, '1005'), (0xF5, 0x4D, '1077'), (0xF5, 0x57, '1087'),
+    (0xF5, 0x61, '1097'), (0xF5, 0x7F, '1127'), (0xF5, 0xE6, '1230'),
+]:
+    send(ser, ubx_packet(0x06, 0x01, bytes([cls, mid, 0, 0, 0, 1, 0, 0])),
+         f"RTCM {name} enabled on USB")
+
+# Set TMODE3 to Survey-In — CFG-TMODE3 (0x06/0x71)
+# flags=1: survey-in mode, svinMinDur=60s, svinAccLimit=50000 (0.1mm units = 5.0m)
+tmode  = struct.pack('<BBH', 0, 0, 1)          # version, reserved0, flags
+tmode += struct.pack('<iii', 0, 0, 0)           # ecefX/Y/Z (unused in survey-in)
+tmode += struct.pack('<bbbb', 0, 0, 0, 0)       # ecefX/Y/ZHP + reserved1
+tmode += struct.pack('<III', 0, 60, 50000)      # fixedPosAcc, svinMinDur, svinAccLimit
+tmode += b'\x00' * 8                            # reserved2
+send(ser, ubx_packet(0x06, 0x71, tmode),
+     'TMODE3 = SURVEY_IN (60s min, 5.0m accuracy limit)')
+
+# Save to all non-volatile storage — CFG-CFG (0x06/0x09)
+cfg  = struct.pack('<III', 0, 0xFFFF, 0)        # clearMask=0, saveMask=all, loadMask=0
+cfg += b'\x17'                                   # deviceMask: BBR + Flash + EEPROM + SpiFlash
+send(ser, ubx_packet(0x06, 0x09, cfg), 'Config saved to flash')
+
+ser.close()
+print("Done. ZED will enter survey-in on next power cycle.")

@@ -21,9 +21,11 @@ Three `pygnssutils` components run as systemd services:
 
 The RFD900x radio is wired directly to the ZED module's UART — the ZED pushes RTCM to the radio at the hardware level. The Pi does not relay to the radio.
 
-The ZED module must be configured to:
-- Output RTCM3 messages: 1005, 1077, 1087, 1097, 1127, 1230
-- TMODE3 set to Base Station mode (`SURVEY_IN` or `FIXED`)
+The ZED module must be configured to output RTCM3 messages and run in Survey-In base station mode. `install_services.sh` handles this automatically via `configure_zed.sh`, which sends UBX commands over `/dev/ttyACM0` and saves the config to the ZED's flash. To re-run manually:
+
+```bash
+bash launch_files/configure_zed.sh
+```
 
 ## Fresh Install
 
