@@ -6,6 +6,11 @@ SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 SERVICE_DIR="$SCRIPT_DIR"
 DEST_DIR="/etc/systemd/system"
 
+echo "Installing dependencies..."
+sudo apt-get update -y
+sudo apt-get install -y tmux python3-pip
+sudo pip3 install --break-system-packages pygnssutils
+
 echo "Copying service files from $SERVICE_DIR to $DEST_DIR..."
 
 if [ ! -d "$SERVICE_DIR" ]; then

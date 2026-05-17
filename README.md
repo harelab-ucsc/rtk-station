@@ -27,10 +27,6 @@ The ZED module must be configured to:
 ## Fresh Install
 
 ```bash
-# 1. Install pygnssutils
-pip install pygnssutils
-
-# 2. Install service files and configure networking
 cd launch_files
 bash install_services.sh
 ```
@@ -78,6 +74,14 @@ LATEST=$(ls -1dt /var/log/rtk-station/boot-* | head -1)
 tail -f "$LATEST/gnss_server.log"
 ls "$LATEST/"
 ```
+
+## Watching Logs Live
+
+```bash
+bash launch_files/watch_services.sh
+```
+
+Opens a tmux session with three panes — one per service — each tailing its latest boot log. If a service hasn't started yet the pane waits until the log appears. Detach with `Ctrl-b d`; re-running the script reattaches.
 
 ## Managing Services
 
