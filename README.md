@@ -47,9 +47,10 @@ The WiFi AP (`HARELAB-RTK`, `162.198.1.1/24`) is managed separately by hostapd a
 
 Connect to the Pi:
 ```bash
-ssh pi@pi-rtkbucket        # if your DNS/mDNS resolves it
-ssh pi@<dhcp-assigned-ip>  # check your router or use arp-scan
+ssh rtk-bucket@pi-rtkbucket        # if your DNS/mDNS resolves it
+ssh rtk-bucket@<dhcp-assigned-ip>  # check your router or use arp-scan
 ```
+Username: `rtk-bucket`, password: `password`
 
 ## Logs
 
