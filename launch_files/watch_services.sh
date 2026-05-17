@@ -24,7 +24,9 @@ done'"
 }
 
 if tmux has-session -t "$SESSION" 2>/dev/null; then
-    exec tmux attach-session -t "$SESSION"
+    tmux attach-session -t "$SESSION"
+    reset
+    exit 0
 fi
 
 tmux new-session -d -s "$SESSION" -n logs
@@ -48,4 +50,5 @@ tmux select-pane -t "$SESSION:0.2" -T "gnss_to_rfd900"
 tmux send-keys -t "$SESSION:0.2" "$(pane_cmd gnss_to_rfd900)" Enter
 
 tmux select-pane -t "$SESSION:0.0"
-exec tmux attach-session -t "$SESSION"
+tmux attach-session -t "$SESSION"
+reset
