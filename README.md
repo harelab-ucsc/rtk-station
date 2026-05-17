@@ -1,13 +1,14 @@
 # rtk-station
 
-Setup and service files for the OASIS RTK base station (permanent, Pi-based).
+Setup and service files for the OASIS RTK base station (portable bucket, Pi-based).
+Replaces the previous OpenWRT-based system documented in `infrastructure_doc/rtk_bucket.md`.
 
 ## Hardware
 
 - **GNSS receiver**: u-blox ZED module on `/dev/ttyACM0` (USB)
 - **Radio**: RFDesign RFD900X2 on `/dev/ttyUSB0` at 57600 baud
-- **Computer**: Raspberry Pi, hostname `pi-rtkbase`
-- **Network**: `172.31.106.1/24`, dnsmasq hands out addresses to clients
+- **Computer**: Raspberry Pi, hostname `pi-rtkbucket`
+- **Network**: ethernet gets DHCP from whatever network it's on; WiFi AP (`HARELAB-RTK`) runs at `162.198.1.1/24` via hostapd
 
 ## How It Works
 
@@ -15,9 +16,9 @@ Three `pygnssutils` components run as systemd services:
 
 | Service | What it does |
 |---|---|
-| `gnss-server` | Reads `/dev/ttyACM0`, exposes a TCP byte stream on port 50010 |
-| `gnss-to-ntrip` | Connects to port 50010, filters RTCM, serves NTRIP on port 2101 (mount point: `pygnssutils`) |
-| `gnss-to-rfd900` | Connects to port 50010, filters RTCM, writes to the RFD900x radio |
+| `gnss_server` | Reads `/dev/ttyACM0`, exposes a TCP byte stream on port 50010 |
+| `gnss_to_ntrip` | Connects to port 50010, filters RTCM, serves NTRIP on port 2101 (mount point: `pygnssutils`) |
+| `gnss_to_rfd900` | Connects to port 50010, filters RTCM, writes to the RFD900x radio |
 
 The ZED module must be configured to:
 - Output RTCM3 messages: 1005, 1077, 1087, 1097, 1127, 1230
@@ -34,17 +35,20 @@ cd launch_files
 bash install_services.sh
 ```
 
-`install_services.sh` copies the `.service` files to `/etc/systemd/system/`, enables them on boot, and then calls `install_netconfig.sh` to set the static IP.
+`install_services.sh` copies the `.service` files to `/etc/systemd/system/`, enables them on boot, installs `rtk-log-setup` and `rtk-log-run` to `/usr/local/bin/`, and then calls `install_netconfig.sh` to set the hostname and apply the netplan config.
 
 ## Networking
 
-`install_netconfig.sh` copies `netplan/rtk.yaml` to `/etc/netplan/50-oasis-rtk.yaml` and applies it. The config assigns a static IP of `172.31.106.1/24` to the `end0` interface.
+`install_netconfig.sh`:
+- Copies `netplan/rtk.yaml` to `/etc/netplan/50-oasis-rtk.yaml` — configures `end0` as DHCP
+- Sets hostname to `pi-rtkbucket`
+
+The WiFi AP (`HARELAB-RTK`, `162.198.1.1/24`) is managed separately by hostapd and dnsmasq — netplan leaves `wlan0` alone.
 
 Connect to the Pi:
-```
-ssh pi@pi-rtkbase   # password: pi
-# or by IP:
-ssh pi@172.31.106.1
+```bash
+ssh pi@pi-rtkbucket        # if your DNS/mDNS resolves it
+ssh pi@<dhcp-assigned-ip>  # check your router or use arp-scan
 ```
 
 ## Logs
@@ -58,9 +62,7 @@ Each boot creates one directory containing a log file per service:
         gnss_to_ntrip.log
         gnss_to_rfd900.log
     boot-20250516_131500/
-        gnss_server.log
-        gnss_to_ntrip.log
-        gnss_to_rfd900.log
+        ...
 ```
 
 `rtk-log-setup.service` runs once before the gnss services, creates the directory, and writes its path to `/run/rtk-station/current-log-dir` (ephemeral tmpfs, cleared each boot). `rtk-log-run` reads that path and appends to `<boot-dir>/<service>.log`.
@@ -86,10 +88,10 @@ bash launch_files/start_services.sh
 bash launch_files/stop_services.sh
 
 # Status
-systemctl status gnss-server gnss-to-ntrip gnss-to-rfd900
+systemctl status gnss_server gnss_to_ntrip gnss_to_rfd900 rtk-log-setup
 
 # Logs
-journalctl -u gnss-server -f
+journalctl -u gnss_server -f
 ```
 
 ## Radio Config (RFD900X2)
@@ -105,4 +107,4 @@ Key parameters to verify:
 
 Verify raw bytes pass over the radio link before testing RTCM.
 
-See `infrastructure_doc/rtk_base.md` and `infrastructure_doc/rfd900x/` for the config file and firmware.
+See `infrastructure_doc/rtk_bucket.md` and `infrastructure_doc/rfd900x/` for the config file and firmware.

@@ -1,5 +1,5 @@
 #!/bin/bash
-# Install netplan configuration for the RTK base station Pi.
+# Install netplan configuration for the RTK portable bucket Pi.
 # Copies netplan/rtk.yaml to /etc/netplan/ and applies it when networkd is running.
 
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
@@ -25,7 +25,7 @@ else
     echo "systemd not active — netplan config installed, skipping netplan apply"
 fi
 
-HOSTNAME="pi-rtkbase"
+HOSTNAME="pi-rtkbucket"
 echo "Setting hostname to $HOSTNAME..."
 
 # Update /etc/hosts before calling hostnamectl so sudo can resolve the new

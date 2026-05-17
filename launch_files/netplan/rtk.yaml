@@ -4,6 +4,7 @@ network:
 
   ethernets:
     end0:
-      dhcp4: false
-      addresses:
-        - 172.31.106.1/24
+      dhcp4: true   # connects to lab/field network, gets IP via DHCP
+
+  # wlan0 is managed by hostapd — it brings up the HARELAB-RTK AP and
+  # assigns 162.198.1.1/24 to the interface. Netplan leaves it alone.
