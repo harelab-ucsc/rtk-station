@@ -6,7 +6,7 @@ Replaces the previous OpenWRT-based system documented in `infrastructure_doc/rtk
 ## Hardware
 
 - **GNSS receiver**: u-blox ZED module on `/dev/ttyACM0` (USB)
-- **Radio**: RFDesign RFD900X2 on `/dev/ttyUSB0` at 57600 baud
+- **Radio**: RFDesign RFD900X2 wired to ZED UART (not connected to Pi)
 - **Computer**: Raspberry Pi, hostname `pi-rtkbucket`
 - **Network**: ethernet gets DHCP from whatever network it's on; WiFi AP (`HARELAB-RTK`) runs at `162.198.1.1/24` via hostapd
 
@@ -18,7 +18,8 @@ Three `pygnssutils` components run as systemd services:
 |---|---|
 | `gnss_server` | Reads `/dev/ttyACM0`, exposes a TCP byte stream on port 50010 |
 | `gnss_to_ntrip` | Connects to port 50010, filters RTCM, serves NTRIP on port 2101 (mount point: `pygnssutils`) |
-| `gnss_to_rfd900` | Connects to port 50010, filters RTCM, writes to the RFD900x radio |
+
+The RFD900x radio is wired directly to the ZED module's UART — the ZED pushes RTCM to the radio at the hardware level. The Pi does not relay to the radio.
 
 The ZED module must be configured to:
 - Output RTCM3 messages: 1005, 1077, 1087, 1097, 1127, 1230
@@ -93,7 +94,7 @@ bash launch_files/start_services.sh
 bash launch_files/stop_services.sh
 
 # Status
-systemctl status gnss_server gnss_to_ntrip gnss_to_rfd900 rtk-log-setup
+systemctl status gnss_server gnss_to_ntrip rtk-log-setup
 
 # Logs
 journalctl -u gnss_server -f
