@@ -6,9 +6,6 @@ network:
     end0:
       dhcp4: true   # connects to lab/field network, gets IP via DHCP
 
-  wifis:
-    wlan0:
-      dhcp4: false
-      addresses:
-        - 172.31.106.2/24
-      # hostapd manages the AP association; netplan just assigns the static IP
+  # wlan0 IP (172.31.106.2/24) is assigned via systemd-networkd directly
+  # (see install_wifi_ap.sh) so netplan doesn't need to know about it.
+  # hostapd manages the AP association.
