@@ -42,7 +42,11 @@ bash install_services.sh
 - Copies `netplan/rtk.yaml` to `/etc/netplan/50-oasis-rtk.yaml` — configures `end0` as DHCP
 - Sets hostname to `pi-rtkbucket`
 
-The WiFi AP (`HARELAB-RTK`, `162.198.1.1/24`) is managed separately by hostapd and dnsmasq — netplan leaves `wlan0` alone.
+The WiFi AP is managed by hostapd and dnsmasq, installed by `install_wifi_ap.sh` (called automatically by `install_services.sh`):
+- **SSID**: `HARELAB-RTK`
+- **Password**: `password`
+- **Pi IP on AP**: `172.31.106.2`
+- **DHCP range**: `172.31.106.10 – 172.31.106.100`
 
 Connect to the Pi:
 ```bash
