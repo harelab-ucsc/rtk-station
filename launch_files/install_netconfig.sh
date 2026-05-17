@@ -27,15 +27,16 @@ fi
 
 HOSTNAME="pi-rtkbase"
 echo "Setting hostname to $HOSTNAME..."
-sudo hostnamectl set-hostname "$HOSTNAME"
 
-# Ensure /etc/hosts has the canonical entry (127.0.1.1 is the Debian/Ubuntu
-# convention for the machine's own hostname when it has no static loopback IP).
+# Update /etc/hosts before calling hostnamectl so sudo can resolve the new
+# hostname immediately on subsequent commands.
 if grep -q "^127\.0\.1\.1" /etc/hosts; then
     sudo sed -i "s/^127\.0\.1\.1.*/127.0.1.1\t$HOSTNAME/" /etc/hosts
 else
     echo -e "127.0.1.1\t$HOSTNAME" | sudo tee -a /etc/hosts > /dev/null
 fi
+
+sudo hostnamectl set-hostname "$HOSTNAME"
 echo "Hostname set."
 
 echo "Done."
