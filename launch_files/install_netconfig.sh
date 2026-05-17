@@ -26,6 +26,8 @@ echo "Installed $NETPLAN_DEST"
 
 if pidof systemd > /dev/null 2>&1; then
     echo "Applying netplan config..."
+    # Ensure NetworkManager is running before applying — this Pi uses NM not networkd.
+    sudo systemctl start NetworkManager 2>/dev/null || true
     sudo netplan apply
     echo "Netplan applied."
 else
