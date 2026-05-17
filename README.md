@@ -8,7 +8,7 @@ Replaces the previous OpenWRT-based system documented in `infrastructure_doc/rtk
 - **GNSS receiver**: u-blox ZED module on `/dev/ttyACM0` (USB)
 - **Radio**: RFDesign RFD900X2 wired to ZED UART (not connected to Pi)
 - **Computer**: Raspberry Pi, hostname `pi-rtkbucket`
-- **Network**: ethernet gets DHCP from whatever network it's on; WiFi AP (`HARELAB-RTK`) runs at `162.198.1.1/24` via hostapd
+- **Network**: ethernet gets DHCP from whatever network it's on; WiFi AP (`HARELab-RTK-Bucket`) runs at `162.198.1.1/24` via hostapd
 
 ## How It Works
 
@@ -43,7 +43,7 @@ bash install_services.sh
 - Sets hostname to `pi-rtkbucket`
 
 The WiFi AP is managed by hostapd and dnsmasq, installed by `install_wifi_ap.sh` (called automatically by `install_services.sh`):
-- **SSID**: `HARELAB-RTK`
+- **SSID**: `HARELab-RTK-Bucket`
 - **Password**: `password`
 - **Pi IP on AP**: `172.31.106.2`
 - **DHCP range**: `172.31.106.10 – 172.31.106.100`

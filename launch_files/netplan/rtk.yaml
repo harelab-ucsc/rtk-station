@@ -12,6 +12,6 @@ network:
       addresses:
         - 172.31.106.2/24
       access-points:
-        "HARELAB-RTK":
+        "HARELab-RTK-Bucket":
           mode: ap
           password: "password"

@@ -1,5 +1,5 @@
 #!/bin/bash
-# Configure the HARELAB-RTK WiFi access point.
+# Configure the HARELab-RTK-Bucket WiFi access point.
 # Netplan manages the AP via wpa_supplicant (no separate hostapd needed).
 # dnsmasq serves DHCP to clients on wlan0.
 
@@ -34,4 +34,4 @@ else
     echo "systemd not active — configs installed, skipping apply"
 fi
 
-echo "WiFi AP setup done. SSID: HARELAB-RTK, password: password, IP: 172.31.106.2"
+echo "WiFi AP setup done. SSID: HARELab-RTK-Bucket, password: password, IP: 172.31.106.2"
