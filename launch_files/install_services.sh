@@ -7,9 +7,14 @@ SERVICE_DIR="$SCRIPT_DIR"
 DEST_DIR="/etc/systemd/system"
 
 echo "Installing dependencies..."
-sudo apt-get update -y
-sudo apt-get install -y tmux python3-pip
-sudo pip3 install --break-system-packages pygnssutils
+if curl -s --max-time 5 http://archive.raspberrypi.com > /dev/null 2>&1; then
+    sudo apt-get update -y
+    sudo apt-get install -y tmux python3-pip
+    sudo pip3 install --break-system-packages pygnssutils
+else
+    echo "WARNING: No internet — skipping apt/pip installs."
+    echo "         Run manually when online: sudo apt-get install -y tmux python3-pip && sudo pip3 install --break-system-packages pygnssutils"
+fi
 
 echo "Copying service files from $SERVICE_DIR to $DEST_DIR..."
 
