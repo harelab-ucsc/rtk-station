@@ -63,5 +63,9 @@ echo "Installing netconfig..."
 bash "$SCRIPT_DIR/install_netconfig.sh"
 
 echo ""
+echo "Setting up WiFi AP..."
+bash "$SCRIPT_DIR/install_wifi_ap.sh"
+
+echo ""
 echo "Configuring ZED GNSS module..."
 bash "$SCRIPT_DIR/configure_zed.sh"
