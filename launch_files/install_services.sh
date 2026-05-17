@@ -9,7 +9,7 @@ DEST_DIR="/etc/systemd/system"
 echo "Installing dependencies..."
 if curl -s --max-time 5 http://archive.raspberrypi.com > /dev/null 2>&1; then
     sudo apt-get update -y
-    sudo apt-get install -y tmux python3-pip
+    sudo apt-get install -y tmux python3-pip avahi-daemon
     sudo pip3 install --break-system-packages pygnssutils
 else
     echo "WARNING: No internet — skipping apt/pip installs."
@@ -47,6 +47,12 @@ if pidof systemd > /dev/null 2>&1; then
     done
 else
     echo "systemd not active — service files installed, skipping daemon-reload/enable"
+fi
+
+if pidof systemd > /dev/null 2>&1; then
+    echo "Enabling avahi-daemon (mDNS)..."
+    sudo systemctl enable avahi-daemon
+    sudo systemctl start avahi-daemon
 fi
 
 if pidof systemd > /dev/null 2>&1; then
