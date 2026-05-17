@@ -1,0 +1,12 @@
+[Unit]
+Description=GNSS To NTRIP Server
+After=gnss_server.service rtk-log-setup.service
+Requires=gnss_server.service rtk-log-setup.service
+
+[Service]
+ExecStart=/usr/local/bin/rtk-log-run gnss_to_ntrip /usr/local/bin/gnssserver -S localhost:50010 --outport 2101 --ntripmode 1 --protfilter 4 --format 2 --ntripuser myuser --ntrippassword mypassword --maxclients 10 --verbosity 2
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

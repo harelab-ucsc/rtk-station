@@ -1,0 +1,35 @@
+#!/bin/bash
+# Runs once at boot (via rtk-log-setup.service) before any gnss services start.
+# Creates a timestamped boot directory under /var/log/rtk-station/ and writes
+# its path to /run/rtk-station/current-log-dir so rtk-log-run can find it.
+# Also prunes old boot directories: keep last MAX_BOOTS, delete if over MAX_DIR_MB.
+
+LOG_BASE="/var/log/rtk-station"
+RUN_DIR="/run/rtk-station"
+MAX_BOOTS=67
+MAX_DIR_MB=512
+
+mkdir -p "$LOG_BASE" "$RUN_DIR"
+
+# Prune by count (newest-first; +1 accounts for the directory we are about to create).
+mapfile -t existing < <(ls -1dt "$LOG_BASE"/boot-* 2>/dev/null)
+excess=$(( ${#existing[@]} - MAX_BOOTS + 1 ))
+if [ "$excess" -gt 0 ]; then
+    for d in "${existing[@]: -$excess}"; do
+        rm -rf "$d"
+    done
+fi
+
+# Prune by total size.
+dir_kb=$(du -sk "$LOG_BASE" 2>/dev/null | cut -f1)
+while [ "${dir_kb:-0}" -gt $(( MAX_DIR_MB * 1024 )) ]; do
+    oldest=$(ls -1dt "$LOG_BASE"/boot-* 2>/dev/null | tail -1)
+    [ -z "$oldest" ] && break
+    rm -rf "$oldest"
+    dir_kb=$(du -sk "$LOG_BASE" 2>/dev/null | cut -f1)
+done
+
+BOOT_DIR="$LOG_BASE/boot-$(date +%Y%m%d_%H%M%S)"
+mkdir -p "$BOOT_DIR"
+echo "$BOOT_DIR" > "$RUN_DIR/current-log-dir"
+echo "RTK log directory: $BOOT_DIR"

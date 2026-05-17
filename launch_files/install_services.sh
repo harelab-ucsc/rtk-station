@@ -1,0 +1,46 @@
+#!/bin/bash
+# Copy, enable and prepare RTK station .service files.
+# Safe to run inside Docker (no active systemd): installs files but skips daemon-reload/enable.
+
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+SERVICE_DIR="$SCRIPT_DIR"
+DEST_DIR="/etc/systemd/system"
+
+echo "Copying service files from $SERVICE_DIR to $DEST_DIR..."
+
+if [ ! -d "$SERVICE_DIR" ]; then
+    echo "Error: $SERVICE_DIR does not exist."
+    exit 1
+fi
+
+sudo mkdir -p "$DEST_DIR"
+sudo cp "$SERVICE_DIR"/*.service "$DEST_DIR"/
+
+echo "Installing rtk-log-setup and rtk-log-run to /usr/local/bin/..."
+sudo cp "$SCRIPT_DIR/rtk-log-setup" /usr/local/bin/rtk-log-setup
+sudo chmod +x /usr/local/bin/rtk-log-setup
+sudo cp "$SCRIPT_DIR/rtk-log-run" /usr/local/bin/rtk-log-run
+sudo chmod +x /usr/local/bin/rtk-log-run
+sudo mkdir -p /var/log/rtk-station
+
+if pidof systemd > /dev/null 2>&1; then
+    echo "Reloading systemd daemon..."
+    sudo systemctl daemon-reexec
+    sudo systemctl daemon-reload
+
+    echo "Enabling all copied services to start on boot..."
+    for file in "$SERVICE_DIR"/*.service; do
+        [ -e "$file" ] || continue
+        service_name=$(basename "$file")
+        sudo systemctl enable "$service_name"
+        echo "Enabled $service_name"
+    done
+else
+    echo "systemd not active — service files installed, skipping daemon-reload/enable"
+fi
+
+echo "Done. You can now start services with: systemctl start <service-name>, or start_services.sh"
+
+echo ""
+echo "Installing netconfig..."
+bash "$SCRIPT_DIR/install_netconfig.sh"

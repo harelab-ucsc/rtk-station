@@ -1,0 +1,16 @@
+#!/bin/bash
+# Redirects a service's stdout/stderr into the shared boot log directory.
+# Usage: rtk-log-run <service_name> <cmd> [args...]
+#
+# The boot directory is created once by rtk-log-setup.service and its path
+# is written to /run/rtk-station/current-log-dir before any gnss service starts.
+
+SERVICE_NAME="$1"; shift
+
+BOOT_DIR=$(cat /run/rtk-station/current-log-dir 2>/dev/null)
+if [ -z "$BOOT_DIR" ]; then
+    echo "rtk-log-run: /run/rtk-station/current-log-dir missing, falling back to journald" >&2
+    exec "$@"
+fi
+
+exec "$@" >> "$BOOT_DIR/$SERVICE_NAME.log" 2>&1

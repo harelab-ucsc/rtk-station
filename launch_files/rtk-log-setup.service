@@ -1,0 +1,12 @@
+[Unit]
+Description=RTK Station Boot Log Directory Setup
+After=local-fs.target
+Before=gnss_server.service gnss_to_ntrip.service gnss_to_rfd900.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/bin/rtk-log-setup
+
+[Install]
+WantedBy=multi-user.target
