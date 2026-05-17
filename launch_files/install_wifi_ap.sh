@@ -1,44 +1,37 @@
 #!/bin/bash
-# Install and configure the HARELAB-RTK WiFi access point.
-# Uses hostapd for the AP and dnsmasq for DHCP on wlan0 (172.31.106.2/24).
+# Configure the HARELAB-RTK WiFi access point.
+# Netplan manages the AP via wpa_supplicant (no separate hostapd needed).
+# dnsmasq serves DHCP to clients on wlan0.
 
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
-echo "Installing hostapd and dnsmasq..."
+echo "Installing dnsmasq..."
 if curl -s --max-time 5 http://archive.raspberrypi.com > /dev/null 2>&1; then
-    sudo apt-get install -y hostapd dnsmasq
+    sudo apt-get install -y dnsmasq wpasupplicant
 else
-    echo "WARNING: No internet — skipping apt install. Run manually: sudo apt-get install -y hostapd dnsmasq"
+    echo "WARNING: No internet — skipping apt install. Run manually: sudo apt-get install -y dnsmasq wpasupplicant"
 fi
-
-echo "Installing hostapd config..."
-sudo cp "$SCRIPT_DIR/hostapd.conf" /etc/hostapd/hostapd.conf
-sudo sed -i 's|^#\?DAEMON_CONF=.*|DAEMON_CONF="/etc/hostapd/hostapd.conf"|' /etc/default/hostapd
 
 echo "Installing dnsmasq config..."
 sudo cp "$SCRIPT_DIR/dnsmasq-rtk.conf" /etc/dnsmasq.d/rtk-ap.conf
 
-# Assign static IP to wlan0 via systemd-networkd (bypasses netplan's
-# access-points requirement for wifis entries).
-echo "Configuring wlan0 static IP via systemd-networkd..."
-sudo tee /etc/systemd/network/10-wlan0.network > /dev/null << 'EOF'
-[Match]
-Name=wlan0
+# Remove the networkd wlan0 config from the previous attempt if present
+sudo rm -f /etc/systemd/network/10-wlan0.network
 
-[Network]
-Address=172.31.106.2/24
-EOF
+# Remove stale hostapd if it was installed previously
+if systemctl is-enabled hostapd 2>/dev/null | grep -q enabled; then
+    echo "Disabling hostapd (netplan now manages the AP)..."
+    sudo systemctl disable --now hostapd 2>/dev/null || true
+fi
 
 if pidof systemd > /dev/null 2>&1; then
-    sudo systemctl restart systemd-networkd
-    sudo systemctl unmask hostapd
-    sudo systemctl enable hostapd
-    sudo systemctl restart hostapd
+    echo "Applying netplan and restarting dnsmasq..."
+    sudo netplan apply
     sudo systemctl enable dnsmasq
     sudo systemctl restart dnsmasq
-    echo "hostapd and dnsmasq enabled."
+    echo "Done."
 else
-    echo "systemd not active — configs installed, skipping enable/start"
+    echo "systemd not active — configs installed, skipping apply"
 fi
 
 echo "WiFi AP setup done. SSID: HARELAB-RTK, password: password, IP: 172.31.106.2"

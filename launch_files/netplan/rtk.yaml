@@ -4,8 +4,14 @@ network:
 
   ethernets:
     end0:
-      dhcp4: true   # connects to lab/field network, gets IP via DHCP
+      dhcp4: true
 
-  # wlan0 IP (172.31.106.2/24) is assigned via systemd-networkd directly
-  # (see install_wifi_ap.sh) so netplan doesn't need to know about it.
-  # hostapd manages the AP association.
+  wifis:
+    wlan0:
+      dhcp4: false
+      addresses:
+        - 172.31.106.2/24
+      access-points:
+        "HARELAB-RTK":
+          mode: ap
+          password: "password"
