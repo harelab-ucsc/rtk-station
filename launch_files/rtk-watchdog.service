@@ -1,0 +1,12 @@
+[Unit]
+Description=RTK Station Watchdog
+After=gnss_server.service rtk-log-setup.service
+Requires=gnss_server.service rtk-log-setup.service
+
+[Service]
+ExecStart=/usr/local/bin/rtk-log-run rtk-watchdog /usr/local/bin/rtk-watchdog
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

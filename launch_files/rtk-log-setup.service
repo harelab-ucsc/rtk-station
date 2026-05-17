@@ -1,7 +1,7 @@
 [Unit]
 Description=RTK Station Boot Log Directory Setup
 After=local-fs.target
-Before=gnss_server.service gnss_to_ntrip.service gnss_to_rfd900.service
+Before=gnss_server.service gnss_to_ntrip.service rtk-watchdog.service
 
 [Service]
 Type=oneshot

@@ -1,0 +1,107 @@
+#!/usr/bin/env python3
+"""RTK station watchdog.
+Connects to gnss_server (port 50010), parses GNSS messages, and prints a
+status line every INTERVAL seconds covering satellite count, fix type,
+survey-in progress, and CPU temperature.
+Stdout is captured by rtk-log-run into the boot log directory.
+"""
+import struct, socket, time, datetime, sys
+from pyubx2 import UBXReader, ERR_IGNORE
+
+HOST, PORT = "localhost", 50010
+INTERVAL = 10  # seconds between status lines
+
+FIX_NAMES = {
+    0: "no fix", 1: "GPS", 2: "DGPS", 3: "PPS",
+    4: "RTK fixed", 5: "RTK float", 6: "estimated",
+}
+
+def cpu_temp():
+    try:
+        with open("/sys/class/thermal/thermal_zone0/temp") as f:
+            return int(f.read()) / 1000
+    except OSError:
+        return None
+
+def log(msg):
+    ts = datetime.datetime.now().strftime("%H:%M:%S")
+    print(f"[{ts}] {msg}", flush=True)
+
+def main():
+    state = {
+        "sats": 0,
+        "fix": 0,
+        "svin_dur": 0,
+        "svin_acc": None,   # mm
+        "svin_valid": False,
+        "svin_active": False,
+    }
+    last_log = 0.0
+    log("Watchdog started")
+
+    while True:
+        try:
+            sock = socket.socket()
+            sock.settimeout(15)
+            sock.connect((HOST, PORT))
+            ubr = UBXReader(sock.makefile("rb"), protfilter=7, quitonerror=ERR_IGNORE)
+
+            for _, parsed in ubr:
+                if parsed is None:
+                    continue
+
+                # NMEA GGA — satellite count and fix quality
+                if getattr(parsed, "msgID", None) == "GGA":
+                    try:
+                        state["fix"] = int(parsed.quality or 0)
+                        state["sats"] = int(parsed.numSV or 0)
+                    except (ValueError, TypeError):
+                        pass
+
+                # NAV-SVIN — survey-in status (0x01 / 0x3B)
+                if getattr(parsed, "identity", "") == "NAV-SVIN":
+                    try:
+                        state["svin_dur"] = parsed.dur
+                        state["svin_acc"] = parsed.meanAcc * 0.1  # 0.1mm → mm
+                        state["svin_valid"] = bool(parsed.valid)
+                        state["svin_active"] = bool(parsed.active)
+                    except AttributeError:
+                        # pyubx2 didn't decode fields — parse raw payload
+                        pl = getattr(parsed, "payload", b"")
+                        if len(pl) >= 40:
+                            state["svin_dur"] = struct.unpack_from("<I", pl, 8)[0]
+                            state["svin_acc"] = struct.unpack_from("<I", pl, 28)[0] * 0.1
+                            state["svin_valid"] = bool(pl[36])
+                            state["svin_active"] = bool(pl[37])
+
+                # Emit status line every INTERVAL seconds
+                now = time.time()
+                if now - last_log >= INTERVAL:
+                    last_log = now
+
+                    fix_str = FIX_NAMES.get(state["fix"], "unknown")
+                    temp = cpu_temp()
+                    temp_str = f"{temp:.1f}°C" if temp is not None else "N/A"
+
+                    if state["svin_acc"] is not None:
+                        acc_m = state["svin_acc"] / 1000
+                        svin_str = (
+                            f"dur={state['svin_dur']}s "
+                            f"acc={acc_m:.2f}m "
+                            f"valid={'Y' if state['svin_valid'] else 'N'} "
+                            f"active={'Y' if state['svin_active'] else 'N'}"
+                        )
+                    else:
+                        svin_str = "waiting..."
+
+                    log(f"sats={state['sats']:2d}  fix={fix_str:<10}  svin {svin_str}  cpu={temp_str}")
+
+        except (ConnectionRefusedError, OSError):
+            log("gnss_server unavailable, retrying in 5s...")
+            time.sleep(5)
+        except Exception as e:
+            log(f"error: {e}, retrying in 5s...")
+            time.sleep(5)
+
+if __name__ == "__main__":
+    main()

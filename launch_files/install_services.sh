@@ -27,7 +27,7 @@ sudo mkdir -p "$DEST_DIR"
 sudo cp "$SERVICE_DIR"/*.service "$DEST_DIR"/
 
 echo "Installing helper scripts to /usr/local/bin/..."
-for script in rtk-log-setup rtk-log-run rtk-log-tail; do
+for script in rtk-log-setup rtk-log-run rtk-log-tail rtk-watchdog; do
     sudo cp "$SCRIPT_DIR/$script" /usr/local/bin/$script
     sudo chmod +x /usr/local/bin/$script
 done
