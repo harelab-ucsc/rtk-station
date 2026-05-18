@@ -6,7 +6,7 @@ Replaces the previous OpenWRT-based system documented in `infrastructure_doc/rtk
 ## Hardware
 
 - **GNSS receiver**: u-blox ZED module — always `/dev/rtk-zed` via udev rule (VID:1546 PID:01a9)
-- **Radio**: RFDesign RFD900X2 wired to ZED UART (not connected to Pi)
+- **Radio**: RFDesign RFD900X2 wired to ZED **UART2** (TX2/RX2 pins — not connected to Pi)
 - **Computer**: Raspberry Pi, hostname `pi-rtkbucket`
 - **Network**: ethernet gets DHCP from whatever network it's on; WiFi AP (`HARELab-RTK-Bucket`) runs at `162.198.1.1/24` via hostapd
 
@@ -16,12 +16,12 @@ Three `pygnssutils` components run as systemd services:
 
 | Service | What it does |
 |---|---|
-| `gnss_server` | Reads `/dev/ttyACM0`, exposes a TCP byte stream on port 50010 |
+| `gnss_server` | Reads `/dev/rtk-zed`, exposes a TCP byte stream on port 50010 |
 | `gnss_to_ntrip` | Connects to port 50010, filters RTCM, serves NTRIP on port 2101 (mount point: `pygnssutils`) |
 
-The RFD900x radio is wired directly to the ZED module's UART1 — the ZED pushes RTCM to the radio at the hardware level. The Pi does not relay to the radio. RTCM messages are enabled on both USB (for NTRIP via Pi) and UART1 (for RFD900x radio link).
+The RFD900x radio is wired directly to the ZED module's **UART2 (TX2/RX2)** — the ZED pushes RTCM to the radio at the hardware level. The Pi does not relay to the radio. RTCM messages are enabled on both USB (for NTRIP via Pi) and UART2 (for RFD900x radio link). Configuration uses CFG-VALSET (not legacy CFG-MSG) as required by the ZED-F9P firmware.
 
-The ZED module must be configured to output RTCM3 messages and run in Survey-In base station mode. `install_services.sh` handles this automatically via `configure_zed.sh`, which sends UBX commands over `/dev/ttyACM0` and saves the config to the ZED's flash. To re-run manually:
+The ZED module must be configured to output RTCM3 messages and run in Survey-In base station mode. `install_services.sh` handles this automatically via `configure_zed.sh`, which sends UBX commands over `/dev/rtk-zed` and saves the config to the ZED's flash. To re-run manually:
 
 ```bash
 bash launch_files/configure_zed.sh
@@ -66,6 +66,8 @@ Use these credentials on the rover (DJI controller, u-center, etc.):
 | Username | `myuser` |
 | Password | `mypassword` |
 | Mountpoint | `pygnssutils` |
+
+The NTRIP server responds with `ICY 200 OK` (NTRIPv1) and serves a sourcetable — required by the DJI CSDK NTRIP client. Settings must be saved while the controller has internet access; after saving they persist for field use on the hotspot.
 
 The NTRIP server only streams data once the ZED has completed survey-in (fix acquired, accuracy < 5m).
 

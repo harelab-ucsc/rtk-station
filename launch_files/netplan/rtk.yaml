@@ -3,7 +3,7 @@ network:
   renderer: NetworkManager
 
   ethernets:
-    end0:
+    eth0:
       dhcp4: true
 
   wifis:

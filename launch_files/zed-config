@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 """Configure ZED RTCM output rates for RTK base station mode.
 Uses pyubx2 API. Does NOT touch TMODE3 — run zed-config-init for first install.
+
+RFD900x radio is wired to ZED UART2 (TX2/RX2).
+CFG-VALSET used for UART2 RTCM rates — newer ZED-F9P firmware requires this.
 """
 from pyubx2 import UBXMessage, SET
 import serial, sys, time
@@ -14,41 +17,68 @@ def send(ser, msg, label=''):
     if label:
         print(f"  {label}")
 
+def drain(ser):
+    time.sleep(1)
+    while ser.in_waiting:
+        ser.read(ser.in_waiting)
+        time.sleep(0.2)
+
+def valset(ser, keys, label=''):
+    drain(ser)
+    msg = UBXMessage.config_set(layers=7, transaction=0, cfgData=keys)
+    ser.write(msg.serialize())
+    ser.flush()
+    start = time.time()
+    buf = b""
+    while time.time() - start < 3:
+        buf += ser.read(ser.in_waiting or 1)
+        if b"\xb5\x62\x05\x01" in buf:
+            if label:
+                print(f"  {label}")
+            return True
+        if b"\xb5\x62\x05\x00" in buf:
+            print(f"  NAK: {label}", file=sys.stderr)
+            return False
+    print(f"  TIMEOUT: {label}", file=sys.stderr)
+    return False
+
 try:
-    ser = serial.Serial(PORT, BAUD, timeout=3)
+    ser = serial.Serial(PORT, BAUD, timeout=1)
 except serial.SerialException as e:
     print(f"Cannot open {PORT}: {e}", file=sys.stderr)
     sys.exit(1)
 
 print(f"Configuring ZED RTCM output on {PORT}...")
 
-# UART1: 57600 baud, RTCM3 output only — for RFD900x radio wired to ZED UART1
+# UART2: 57600 baud, RTCM3 output — RFD900x radio wired to ZED UART2 (TX2/RX2)
 send(ser, UBXMessage('CFG', 'CFG-PRT', SET,
-    portID=1, reserved0=0, txReady=0,
+    portID=2, reserved0=0, txReady=0,
     mode=0x000008D0,        # 8N1
     baudRate=57600,
     inProtoMask=0x0001,     # UBX input only
     outProtoMask=0x0020,    # RTCM3 output only
     flags=0, reserved2=0),
-    "UART1 = 57600 baud, RTCM3 output (RFD900x)")
+    "UART2 = 57600 baud, RTCM3 output (RFD900x)")
 
-# Enable RTCM messages on USB (→ NTRIP) and UART1 (→ RFD900x)
+# Enable RTCM messages on USB via CFG-MSG
 for cls, mid, name in [
     (0xF5, 0x05, '1005'), (0xF5, 0x4D, '1077'), (0xF5, 0x57, '1087'),
     (0xF5, 0x61, '1097'), (0xF5, 0x7F, '1127'), (0xF5, 0xE6, '1230'),
 ]:
     send(ser, UBXMessage('CFG', 'CFG-MSG', SET,
         msgClass=cls, msgID=mid,
-        rateDDC=0, rateUART1=1, rateUART2=0, rateUSB=1, rateSPI=0, reserved=0),
-        f"RTCM {name} on USB + UART1")
+        rateDDC=0, rateUART1=0, rateUART2=0, rateUSB=1, rateSPI=0, reserved=0),
+        f"RTCM {name} on USB")
 
-# Save to all non-volatile storage
-send(ser, UBXMessage('CFG', 'CFG-CFG', SET,
-    clearMask=b'\x00\x00\x00\x00',
-    saveMask=b'\xff\xff\x00\x00',
-    loadMask=b'\x00\x00\x00\x00',
-    deviceMask=b'\x17'),
-    "Config saved to flash")
+# Enable RTCM messages on UART2 via CFG-VALSET (required on newer firmware)
+valset(ser, [
+    ("CFG-MSGOUT-RTCM_3X_TYPE1005_UART2", 1),
+    ("CFG-MSGOUT-RTCM_3X_TYPE1077_UART2", 1),
+    ("CFG-MSGOUT-RTCM_3X_TYPE1087_UART2", 1),
+    ("CFG-MSGOUT-RTCM_3X_TYPE1097_UART2", 1),
+    ("CFG-MSGOUT-RTCM_3X_TYPE1127_UART2", 1),
+    ("CFG-MSGOUT-RTCM_3X_TYPE1230_UART2", 1),
+], "RTCM 1005/1077/1087/1097/1127/1230 on UART2 (CFG-VALSET)")
 
 ser.close()
 print("Done.")

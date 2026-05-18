@@ -26,7 +26,8 @@ sudo rm -f /etc/systemd/network/10-wlan0.network
 
 if pidof systemd > /dev/null 2>&1; then
     echo "Applying netplan..."
-    sudo netplan apply
+    sudo netplan generate
+    sudo netplan apply || true
     sudo systemctl enable dnsmasq
     sudo systemctl restart dnsmasq
     echo "Done."
