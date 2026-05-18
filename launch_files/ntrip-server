@@ -1,0 +1,104 @@
+#!/usr/bin/env python3
+"""Minimal NTRIPv1 caster that proxies RTCM from gnss_server.
+Responds with 'ICY 200 OK' (NTRIPv1) instead of HTTP/1.1 200 OK.
+Serves sourcetable at GET / so DJI can validate the mount point.
+"""
+import socket, threading, time, base64, sys
+
+GNSS_HOST, GNSS_PORT = 'localhost', 50010
+LISTEN_PORT = 2101
+MOUNTPOINT  = 'pygnssutils'
+USERNAME    = 'myuser'
+PASSWORD    = 'mypassword'
+
+SOURCETABLE = (
+    "SOURCETABLE 200 OK\r\n"
+    "Server: NTRIP-RTKStation/1.0\r\n"
+    "Content-Type: text/plain\r\n"
+    "\r\n"
+    f"STR;{MOUNTPOINT};RTK-Bucket;RTCM 3.3;1005(1),1077(1),1087(1),1097(1),1127(1),1230(1);2;GPS+GLO+GAL+BDS;UCSC;USA;36.86;-122.06;0;0;ZED-F9P;none;B;N;0;;\r\n"
+    "ENDSOURCETABLE\r\n"
+)
+
+def handle_client(conn, addr):
+    try:
+        data = b''
+        while b'\r\n\r\n' not in data:
+            chunk = conn.recv(1024)
+            if not chunk:
+                return
+            data += chunk
+
+        request = data.decode('utf-8', errors='ignore')
+        first_line = request.split('\r\n')[0]
+
+        # Sourcetable request
+        if 'GET / ' in first_line or 'GET /\r' in first_line:
+            conn.sendall(SOURCETABLE.encode())
+            conn.close()
+            return
+
+        # Mount point request — validate credentials
+        auth_ok = False
+        for line in request.split('\r\n'):
+            if line.lower().startswith('authorization:'):
+                try:
+                    encoded = line.split(' ', 2)[-1].strip()
+                    decoded = base64.b64decode(encoded).decode()
+                    u, p = decoded.split(':', 1)
+                    auth_ok = (u == USERNAME and p == PASSWORD)
+                except Exception:
+                    pass
+
+        if not auth_ok:
+            conn.sendall(b'HTTP/1.1 401 Unauthorized\r\n\r\n')
+            conn.close()
+            return
+
+        if MOUNTPOINT not in first_line:
+            conn.sendall(b'HTTP/1.1 404 Not Found\r\n\r\n')
+            conn.close()
+            return
+
+        # NTRIPv1 response — ICY 200 OK
+        conn.sendall(b'ICY 200 OK\r\n\r\n')
+
+        # Stream RTCM from gnss_server
+        upstream = socket.socket()
+        upstream.settimeout(10)
+        upstream.connect((GNSS_HOST, GNSS_PORT))
+
+        def pump():
+            try:
+                while True:
+                    chunk = upstream.recv(4096)
+                    if not chunk:
+                        break
+                    conn.sendall(chunk)
+            except Exception:
+                pass
+            finally:
+                upstream.close()
+                conn.close()
+
+        t = threading.Thread(target=pump, daemon=True)
+        t.start()
+
+    except Exception as e:
+        try:
+            conn.close()
+        except Exception:
+            pass
+
+def main():
+    srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    srv.bind(('0.0.0.0', LISTEN_PORT))
+    srv.listen(20)
+    print(f"NTRIPv1 caster listening on :{LISTEN_PORT} mountpoint=/{MOUNTPOINT}", flush=True)
+    while True:
+        conn, addr = srv.accept()
+        threading.Thread(target=handle_client, args=(conn, addr), daemon=True).start()
+
+if __name__ == '__main__':
+    main()

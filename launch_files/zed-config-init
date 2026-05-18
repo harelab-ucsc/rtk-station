@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
-"""Configure ZED RTCM output rates for RTK base station mode.
-Uses pyubx2 API. Does NOT touch TMODE3 — run zed-config-init for first install.
+"""One-time ZED initialisation — sets TMODE3=SURVEY_IN then configures RTCM output.
+Uses pyubx2 API.
+
+Run ONCE on a fresh/factory-reset ZED. Do NOT re-run on a ZED that has already
+completed survey-in — it will discard the saved position and restart from scratch.
+For routine RTCM rate updates use zed-config instead.
 """
 from pyubx2 import UBXMessage, SET
 import serial, sys, time
@@ -20,19 +24,31 @@ except serial.SerialException as e:
     print(f"Cannot open {PORT}: {e}", file=sys.stderr)
     sys.exit(1)
 
-print(f"Configuring ZED RTCM output on {PORT}...")
+print(f"Initialising ZED on {PORT}...")
 
-# UART1: 57600 baud, RTCM3 output only — for RFD900x radio wired to ZED UART1
+# Step 1: Set TMODE3 to Survey-In (60s min, 5.0m accuracy limit)
+send(ser, UBXMessage('CFG', 'CFG-TMODE3', SET,
+    version=0, reserved0=0, flags=1,
+    ecefXOrLat=0, ecefYOrLon=0, ecefZOrAlt=0,
+    ecefXOrLatHP=0, ecefYOrLonHP=0, ecefZOrAltHP=0,
+    reserved1=0, fixedPosAcc=0,
+    svinMinDur=60, svinAccLimit=50000,
+    reserved2=b'\x00' * 8),
+    "TMODE3 = SURVEY_IN (60s, 5.0m)")
+
+time.sleep(0.5)
+
+# Step 2: UART1 at 57600 baud, RTCM3 output (for RFD900x)
 send(ser, UBXMessage('CFG', 'CFG-PRT', SET,
     portID=1, reserved0=0, txReady=0,
-    mode=0x000008D0,        # 8N1
+    mode=0x000008D0,
     baudRate=57600,
-    inProtoMask=0x0001,     # UBX input only
-    outProtoMask=0x0020,    # RTCM3 output only
+    inProtoMask=0x0001,
+    outProtoMask=0x0020,
     flags=0, reserved2=0),
     "UART1 = 57600 baud, RTCM3 output (RFD900x)")
 
-# Enable RTCM messages on USB (→ NTRIP) and UART1 (→ RFD900x)
+# Step 3: Enable RTCM messages on USB + UART1
 for cls, mid, name in [
     (0xF5, 0x05, '1005'), (0xF5, 0x4D, '1077'), (0xF5, 0x57, '1087'),
     (0xF5, 0x61, '1097'), (0xF5, 0x7F, '1127'), (0xF5, 0xE6, '1230'),
@@ -42,7 +58,7 @@ for cls, mid, name in [
         rateDDC=0, rateUART1=1, rateUART2=0, rateUSB=1, rateSPI=0, reserved=0),
         f"RTCM {name} on USB + UART1")
 
-# Save to all non-volatile storage
+# Step 4: Save to flash
 send(ser, UBXMessage('CFG', 'CFG-CFG', SET,
     clearMask=b'\x00\x00\x00\x00',
     saveMask=b'\xff\xff\x00\x00',
@@ -51,4 +67,4 @@ send(ser, UBXMessage('CFG', 'CFG-CFG', SET,
     "Config saved to flash")
 
 ser.close()
-print("Done.")
+print("Done. Take antenna outside and wait for survey-in to complete.")

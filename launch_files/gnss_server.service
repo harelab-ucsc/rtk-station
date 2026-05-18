@@ -5,7 +5,7 @@ Wants=network-online.target
 Requires=rtk-log-setup.service
 
 [Service]
-ExecStart=/usr/local/bin/rtk-log-run gnss_server /usr/local/bin/gnssserver --inport "/dev/ttyACM0" --maxclients 10 --verbosity 2
+ExecStart=/usr/local/bin/rtk-log-run gnss_server /usr/local/bin/gnssserver --inport "/dev/rtk-zed" --maxclients 10 --verbosity 2
 Restart=always
 RestartSec=5
 

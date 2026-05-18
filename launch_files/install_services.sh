@@ -26,8 +26,14 @@ fi
 sudo mkdir -p "$DEST_DIR"
 sudo cp "$SERVICE_DIR"/*.service "$DEST_DIR"/
 
+echo "Installing udev rule for ZED device (stable /dev/rtk-zed symlink)..."
+echo 'SUBSYSTEM=="tty", ATTRS{idVendor}=="1546", ATTRS{idProduct}=="01a9", SYMLINK+="rtk-zed"' \
+    | sudo tee /etc/udev/rules.d/99-rtk-zed.rules > /dev/null
+sudo udevadm control --reload-rules
+sudo udevadm trigger
+
 echo "Installing helper scripts to /usr/local/bin/..."
-for script in rtk-log-setup rtk-log-run rtk-log-tail rtk-watchdog; do
+for script in rtk-log-setup rtk-log-run rtk-log-tail rtk-watchdog ntrip-server; do
     sudo cp "$SCRIPT_DIR/$script" /usr/local/bin/$script
     sudo chmod +x /usr/local/bin/$script
 done
@@ -74,4 +80,15 @@ bash "$SCRIPT_DIR/install_wifi_ap.sh"
 
 echo ""
 echo "Configuring ZED GNSS module..."
-bash "$SCRIPT_DIR/configure_zed.sh"
+# Use zed-config-init only on first install (flag file marks it done).
+# Re-running install_services.sh uses zed-config (RTCM rates only, no TMODE3 reset).
+ZED_INIT_FLAG="/etc/rtk-station/zed-init-done"
+if [ ! -f "$ZED_INIT_FLAG" ]; then
+    echo "First install — running full ZED init (sets TMODE3 + RTCM rates)..."
+    bash "$SCRIPT_DIR/configure_zed.sh" --init
+    sudo mkdir -p /etc/rtk-station
+    sudo touch "$ZED_INIT_FLAG"
+else
+    echo "ZED already initialised — updating RTCM rates only..."
+    bash "$SCRIPT_DIR/configure_zed.sh"
+fi

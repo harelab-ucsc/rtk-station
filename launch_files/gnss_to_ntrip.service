@@ -1,10 +1,10 @@
 [Unit]
-Description=GNSS To NTRIP Server
+Description=GNSS To NTRIP Server (NTRIPv1 - ICY 200 OK)
 After=gnss_server.service rtk-log-setup.service
 Requires=gnss_server.service rtk-log-setup.service
 
 [Service]
-ExecStart=/usr/local/bin/rtk-log-run gnss_to_ntrip /usr/local/bin/gnssserver -S localhost:50010 --outport 2101 --ntripmode 1 --protfilter 4 --format 2 --ntripuser myuser --ntrippassword mypassword --maxclients 10 --verbosity 2
+ExecStart=/usr/local/bin/rtk-log-run gnss_to_ntrip /usr/local/bin/ntrip-server
 Restart=always
 RestartSec=5
 

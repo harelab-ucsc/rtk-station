@@ -1,11 +1,15 @@
 #!/usr/bin/env python3
 """RTK station watchdog.
-Connects to gnss_server (port 50010), parses GNSS messages, and prints a
-status line every INTERVAL seconds covering satellite count, fix type,
-survey-in progress, and CPU temperature.
-Stdout is captured by rtk-log-run into the boot log directory.
+Connects to gnss_server (port 50010), parses GNSS/RTCM messages, and prints a
+status line every INTERVAL seconds with:
+  - satellite count and fix type
+  - survey-in progress
+  - per-constellation satellite count and average SNR from RTCM MSM
+  - dual-frequency status
+  - RTCM 1005 base position
+  - CPU temperature
 """
-import struct, socket, time, datetime, sys
+import socket, time, datetime, sys, math
 from pyubx2 import UBXReader, ERR_IGNORE
 
 HOST, PORT = "localhost", 50010
@@ -16,6 +20,11 @@ FIX_NAMES = {
     4: "RTK fixed", 5: "RTK float", 6: "estimated",
 }
 
+# RTCM MSM message IDs per constellation
+MSM_CONSTELLATIONS = {
+    1077: "GPS", 1087: "GLO", 1097: "GAL", 1127: "BDS",
+}
+
 def cpu_temp():
     try:
         with open("/sys/class/thermal/thermal_zone0/temp") as f:
@@ -23,18 +32,57 @@ def cpu_temp():
     except OSError:
         return None
 
+def ecef_to_latlon(x, y, z):
+    """Convert ECEF to lat/lon (degrees) for display."""
+    try:
+        lon = math.degrees(math.atan2(y, x))
+        p = math.sqrt(x**2 + y**2)
+        lat = math.degrees(math.atan2(z, p * 0.99664719))
+        return lat, lon
+    except Exception:
+        return None, None
+
 def log(msg):
     ts = datetime.datetime.now().strftime("%H:%M:%S")
     print(f"[{ts}] {msg}", flush=True)
+
+def extract_msm_snr(parsed):
+    """Extract SNR values and sat count from an MSM7 message via pyubx2."""
+    try:
+        nsat = parsed.NSat
+        snrs = []
+        dual = 0
+        sigs_per_sat = {}
+        ncell = parsed.NCell
+        for i in range(1, ncell + 1):
+            prn = getattr(parsed, f"CELLPRN_{i:02d}", None)
+            sig = getattr(parsed, f"CELLSIG_{i:02d}", None)
+            snr = getattr(parsed, f"DF408_{i:02d}", None)
+            if snr is not None:
+                snrs.append(snr)
+            if prn is not None:
+                sigs_per_sat.setdefault(prn, set()).add(sig)
+        for sigs in sigs_per_sat.values():
+            if len(sigs) >= 2:
+                dual += 1
+        return nsat, snrs, dual
+    except Exception:
+        return 0, [], 0
 
 def main():
     state = {
         "sats": 0,
         "fix": 0,
         "svin_dur": 0,
-        "svin_acc": None,   # mm
+        "svin_acc": None,
         "svin_valid": False,
         "svin_active": False,
+        "base_lat": None,
+        "base_lon": None,
+        "base_acc_mm": None,
+        "msm": {},      # {constellation: {"nsats": n, "snrs": [], "dual": n}}
+        "rtcm_count": 0,
+        "last_epoch": None,
     }
     last_log = 0.0
     log("Watchdog started")
@@ -50,6 +98,8 @@ def main():
                 if parsed is None:
                     continue
 
+                identity = getattr(parsed, "identity", "")
+
                 # NMEA GGA — satellite count and fix quality
                 if getattr(parsed, "msgID", None) == "GGA":
                     try:
@@ -58,43 +108,43 @@ def main():
                     except (ValueError, TypeError):
                         pass
 
-                # NAV-SVIN — survey-in status (0x01 / 0x3B)
-                if getattr(parsed, "identity", "") == "NAV-SVIN":
+                # NAV-SVIN — survey-in status
+                elif identity == "NAV-SVIN":
                     try:
                         state["svin_dur"] = parsed.dur
                         state["svin_acc"] = parsed.meanAcc * 0.1  # 0.1mm → mm
                         state["svin_valid"] = bool(parsed.valid)
                         state["svin_active"] = bool(parsed.active)
                     except AttributeError:
-                        # pyubx2 didn't decode fields — parse raw payload
-                        pl = getattr(parsed, "payload", b"")
-                        if len(pl) >= 40:
-                            state["svin_dur"] = struct.unpack_from("<I", pl, 8)[0]
-                            state["svin_acc"] = struct.unpack_from("<I", pl, 28)[0] * 0.1
-                            state["svin_valid"] = bool(pl[36])
-                            state["svin_active"] = bool(pl[37])
+                        pass
+
+                # RTCM 1005 — base station position
+                elif identity == "RTCM_1005" or getattr(parsed, "DF002", 0) == 1005:
+                    try:
+                        x = parsed.DF025
+                        y = parsed.DF026
+                        z = parsed.DF027
+                        lat, lon = ecef_to_latlon(x, y, z)
+                        state["base_lat"] = lat
+                        state["base_lon"] = lon
+                    except AttributeError:
+                        pass
+
+                # RTCM MSM7 — per-constellation satellite count, SNR, dual-freq
+                elif getattr(parsed, "DF002", 0) in MSM_CONSTELLATIONS:
+                    msg_id = parsed.DF002
+                    name = MSM_CONSTELLATIONS[msg_id]
+                    if msg_id in (1077, 1087, 1097, 1127):  # MSM7 only
+                        nsats, snrs, dual = extract_msm_snr(parsed)
+                        state["msm"][name] = {"nsats": nsats, "snrs": snrs, "dual": dual}
+                        state["rtcm_count"] += 1
+                        state["last_epoch"] = time.time()
 
                 # Emit status line every INTERVAL seconds
                 now = time.time()
                 if now - last_log >= INTERVAL:
                     last_log = now
-
-                    fix_str = FIX_NAMES.get(state["fix"], "unknown")
-                    temp = cpu_temp()
-                    temp_str = f"{temp:.1f}°C" if temp is not None else "N/A"
-
-                    if state["svin_acc"] is not None:
-                        acc_m = state["svin_acc"] / 1000
-                        svin_str = (
-                            f"dur={state['svin_dur']}s "
-                            f"acc={acc_m:.2f}m "
-                            f"valid={'Y' if state['svin_valid'] else 'N'} "
-                            f"active={'Y' if state['svin_active'] else 'N'}"
-                        )
-                    else:
-                        svin_str = "waiting..."
-
-                    log(f"sats={state['sats']:2d}  fix={fix_str:<10}  svin {svin_str}  cpu={temp_str}")
+                    _emit(state)
 
         except (ConnectionRefusedError, OSError):
             log("gnss_server unavailable, retrying in 5s...")
@@ -102,6 +152,46 @@ def main():
         except Exception as e:
             log(f"error: {e}, retrying in 5s...")
             time.sleep(5)
+
+def _emit(state):
+    fix_str = FIX_NAMES.get(state["fix"], "unknown")
+    temp = cpu_temp()
+    temp_str = f"{temp:.1f}°C" if temp is not None else "N/A"
+
+    # Survey-in
+    if state["svin_acc"] is not None:
+        acc_m = state["svin_acc"] / 1000
+        svin_str = (f"dur={state['svin_dur']}s acc={acc_m:.2f}m "
+                    f"valid={'Y' if state['svin_valid'] else 'N'} "
+                    f"active={'Y' if state['svin_active'] else 'N'}")
+    else:
+        svin_str = "waiting..."
+
+    # Base position
+    if state["base_lat"] is not None:
+        pos_str = f"base={state['base_lat']:.6f},{state['base_lon']:.6f}"
+    else:
+        pos_str = "base=pending"
+
+    # Per-constellation summary
+    msm_parts = []
+    total_dual = 0
+    all_snrs = []
+    for name in ("GPS", "GLO", "GAL", "BDS"):
+        m = state["msm"].get(name)
+        if m:
+            avg = sum(m["snrs"]) / len(m["snrs"]) if m["snrs"] else 0
+            msm_parts.append(f"{name}:{m['nsats']}sv/{m['dual']}L2 {avg:.0f}dB")
+            total_dual += m["dual"]
+            all_snrs.extend(m["snrs"])
+        else:
+            msm_parts.append(f"{name}:--")
+
+    avg_snr = sum(all_snrs) / len(all_snrs) if all_snrs else 0
+    msm_str = "  ".join(msm_parts)
+
+    log(f"sats={state['sats']:2d} fix={fix_str:<10} {svin_str}  cpu={temp_str}")
+    log(f"  {msm_str}  avgSNR={avg_snr:.0f}dB L2={total_dual}sats  {pos_str}")
 
 if __name__ == "__main__":
     main()
